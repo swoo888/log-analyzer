@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import pytz
 
@@ -15,7 +15,7 @@ async def main():
     tz = pytz.timezone("US/Pacific")
     endTime = datetime(2023, 4, 18, 15, 0, 0, 0)
     endTime = tz.localize(endTime)
-    startTime = endTime - timedelta(seconds=20)
+    startTime = endTime - timedelta(hours=2)
     # startTime = endTime - timedelta(days=30)
     authToken = os.getenv("fetcherToken")
     sourceGroup = os.getenv("fetcherSourceGroup")
@@ -25,5 +25,8 @@ async def main():
 
 
 # logging.basicConfig(filename='example.log', encoding='utf-8', level=logging.DEBUG)
+start = datetime.now()
 logging.basicConfig(level=logging.INFO)
 asyncio.run(main())
+duration = datetime.now() - start
+print(f"total time spent: {duration}")

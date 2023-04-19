@@ -32,7 +32,7 @@ class SessionAnalyzer:
             self.sourceGroup,
             self.resultQueue,
         )
-        await asyncio.gather(fetcher.fetch(timeFrom, timeTo, intervalSecs=3), self.analyzeData(fetcher))
+        await asyncio.gather(fetcher.fetch(timeFrom, timeTo), self.analyzeData(fetcher))
 
     async def analyzeData(self, fetcher: LoglyFetcher):
         while not fetcher.isFinished():

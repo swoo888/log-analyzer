@@ -6,7 +6,7 @@ from aiohttp import ClientSession, TCPConnector
 
 
 class LoglyFetcher:
-    MAX_RECORD_SIZE = 5000  # logly has 5000 records limit each fetch
+    MAX_RECORD_SIZE = 1000  # logly's max fetch size limit
 
     def __init__(
         self,
@@ -15,14 +15,15 @@ class LoglyFetcher:
         authToken: str,
         sourceGroup: str,
         resultQueue: asyncio.Queue,
-        maxConcurrency: int = 100,
+        maxConcurrency: int = 10,
+        maxRetries: int = 20,
     ) -> None:
         self.baseUri = baseUri  # "http://companyName.loggly.com/apiv2"
         self.queryParam = queryParam
         self.authToken = authToken
         self.sourceGroup = sourceGroup
         self.resultQueue = resultQueue
-        self.intervalSecs = 5  # default time interval to fetch data
+        self.intervalSecs = 10 * 60  # default time interval to fetch data
         self.logger = logging.getLogger(LoglyFetcher.__name__)
         self.headers = {
             "Authorization": "bearer " + authToken,
@@ -30,6 +31,7 @@ class LoglyFetcher:
         }
         self.finished = False
         self.maxConcurrency = maxConcurrency
+        self.maxRetries = maxRetries
 
     def getUtcStr(self, utcTime: datetime) -> str:
         return utcTime.isoformat(timespec="milliseconds").replace("+00:00", "Z")
@@ -37,53 +39,51 @@ class LoglyFetcher:
     def isFinished(self) -> bool:
         return self.finished
 
+    async def fetchUrl(
+        self,
+        session: ClientSession,
+        url: str,
+        params: dict,
+    ):
+        tries = 1
+        while tries < self.maxRetries:
+            try:
+                resp = await session.get(url=url, params=params)
+                resp.raise_for_status()
+                return resp
+            except Exception as ex:
+                tries = tries + 1
+                self.logger.error(ex)
+        return None
+
     async def fetchTimeRange(
         self,
         session: ClientSession,
         timeFrom: datetime,
         timeTo: datetime,
-        maxRetries: int = 5,
     ) -> None:
         params = {
             "q": self.queryParam,
             "size": LoglyFetcher.MAX_RECORD_SIZE,
             "from": self.getUtcStr(timeFrom),
             "until": self.getUtcStr(timeTo),
-            "source_group": self.sourceGroup,
         }
-        tries = 1
-        while tries < maxRetries:
-            try:
-                searchUri = self.baseUri + "/search"
-                searchResp = await session.get(url=searchUri, params=params)
-                searchResp.raise_for_status()
-                data = await searchResp.json()
-                rsid = data["rsid"]["id"]
-                self.logger.info(f"Search finished for rsid: {rsid}")
-
-                eventsUri = self.baseUri + "/events"
-                params = {"rsid": rsid}
-                eventsResp = await session.get(url=eventsUri, params=params)
-                eventsResp.raise_for_status()
-                jsonData = await eventsResp.json()
-                await self.putData(jsonData)
-            except Exception as ex:
-                tries = tries + 1
-                self.logger.error(ex)
-            else:
-                break
+        url = self.baseUri + "events/iterate"
+        while url:
+            resp = await self.fetchUrl(session, url, params)
+            if resp is None:
+                raise Exception("fetching data failed with max tries")
+            jsonData = await resp.json()
+            await self.putData(jsonData)
+            url = jsonData.get("next", "")
 
     async def putData(self, jsonData: dict) -> None:
-        totalEvents = jsonData["total_events"]
-        self.logger.info(f"Search data received {totalEvents}")
-        if totalEvents > self.MAX_RECORD_SIZE:
-            self.logger.warn(
-                f"total events is larger than {self.MAX_RECORD_SIZE}! Use smaller time interval."
-            )
-        await self.resultQueue.put(jsonData["events"])
+        events = jsonData["events"]
+        self.logger.info(f"Search data received {len(events)}")
+        await self.resultQueue.put(events)
 
     async def fetch(
-        self, startTime: datetime, endTime: datetime, intervalSecs: int = 3
+        self, startTime: datetime, endTime: datetime, intervalSecs: int = 6 * 60
     ) -> None:
         start = startTime
         deltaSecs = timedelta(seconds=intervalSecs)
