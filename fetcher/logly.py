@@ -27,9 +27,13 @@ class LoglyFetcher:
             "Authorization": "bearer " + authToken,
             "Content-Type": "application/json",
         }
+        self.finished = False
 
     def getUtcStr(self, utcTime: datetime) -> str:
         return utcTime.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    def isFinished(self) -> bool:
+        return self.finished
 
     async def fetchTimeRange(self, timeFrom: datetime, timeTo: datetime) -> None:
         params = {
@@ -43,10 +47,9 @@ class LoglyFetcher:
             searchUri = self.baseUri + "/search"
             searchResp = await session.get(url=searchUri, params=params)
             searchResp.raise_for_status()
-            # data = await searchResp.json()
             data = await searchResp.json()
             rsid = data["rsid"]["id"]
-            self.logger.info("Search finished " + str(rsid))
+            self.logger.info(f"Search finished for rsid: {rsid}")
 
             eventsUri = self.baseUri + "/events"
             params = {"rsid": rsid}
@@ -71,5 +74,9 @@ class LoglyFetcher:
         deltaSecs = timedelta(seconds=intervalSecs)
         while start < endTime:
             end = min(start + deltaSecs, endTime)
+            self.logger.info(f"fetching {start}, {end}")
             await self.fetchTimeRange(start, end)
             start = start + deltaSecs
+        await self.resultQueue.put(None)  # Allow analyzer await function to exist
+        self.finished = True
+        self.logger.info("=== Finished data Fetch ===")
