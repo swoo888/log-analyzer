@@ -6,7 +6,8 @@ from aiohttp import ClientSession, TCPConnector
 
 
 class LoglyFetcher:
-    MAX_RECORD_SIZE = 1000  # logly's max fetch size limit
+    MAX_RECORD_SIZE = 1000  # loggly's max fetch size limit
+    FETCH_INTERVAL_SECS = 5 * 60  # loggly data fetch interval
 
     def __init__(
         self,
@@ -15,15 +16,14 @@ class LoglyFetcher:
         authToken: str,
         sourceGroup: str,
         resultQueue: asyncio.Queue,
-        maxConcurrency: int = 10,
-        maxRetries: int = 20,
+        maxConcurrency: int = 20,
+        maxRetries: int = 100,
     ) -> None:
         self.baseUri = baseUri  # "http://companyName.loggly.com/apiv2"
         self.queryParam = queryParam
         self.authToken = authToken
         self.sourceGroup = sourceGroup
         self.resultQueue = resultQueue
-        self.intervalSecs = 10 * 60  # default time interval to fetch data
         self.logger = logging.getLogger(LoglyFetcher.__name__)
         self.headers = {
             "Authorization": "bearer " + authToken,
@@ -39,7 +39,7 @@ class LoglyFetcher:
     def isFinished(self) -> bool:
         return self.finished
 
-    async def fetchUrl(
+    async def fetchJson(
         self,
         session: ClientSession,
         url: str,
@@ -50,10 +50,12 @@ class LoglyFetcher:
             try:
                 resp = await session.get(url=url, params=params)
                 resp.raise_for_status()
-                return resp
+                jsonData = await resp.json()
+                return jsonData
             except Exception as ex:
                 tries = tries + 1
                 self.logger.error(ex)
+                await asyncio.sleep(1)
         return None
 
     async def fetchTimeRange(
@@ -70,10 +72,9 @@ class LoglyFetcher:
         }
         url = self.baseUri + "events/iterate"
         while url:
-            resp = await self.fetchUrl(session, url, params)
-            if resp is None:
+            jsonData = await self.fetchJson(session, url, params)
+            if jsonData is None:
                 raise Exception("fetching data failed with max tries")
-            jsonData = await resp.json()
             await self.putData(jsonData)
             url = jsonData.get("next", "")
 
@@ -83,7 +84,7 @@ class LoglyFetcher:
         await self.resultQueue.put(events)
 
     async def fetch(
-        self, startTime: datetime, endTime: datetime, intervalSecs: int = 6 * 60
+        self, startTime: datetime, endTime: datetime, intervalSecs: int = FETCH_INTERVAL_SECS
     ) -> None:
         start = startTime
         deltaSecs = timedelta(seconds=intervalSecs)
@@ -95,7 +96,12 @@ class LoglyFetcher:
                 self.logger.info(f"fetching {start}, {end}")
                 tasks.append(self.fetchTimeRange(session, start, end))
                 start = start + deltaSecs
-            await asyncio.gather(*tasks)
+                if len(tasks) >= self.maxConcurrency:
+                    await asyncio.gather(*tasks)
+                    self.logger.info(f"finished batch of {self.maxConcurrency} at {endTime}")
+                    tasks = []
+            if len(tasks) > 0:
+                await asyncio.gather(*tasks)
         await self.resultQueue.put(None)  # Allow analyzer await function to exist
         self.finished = True
         self.logger.info("=== Finished data Fetch ===")

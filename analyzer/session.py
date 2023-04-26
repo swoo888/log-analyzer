@@ -52,7 +52,7 @@ class SessionAnalyzer:
                     continue
                 sid = queryParams.get("sid", "")
                 deviceId = queryParams.get("deviceId", "")
-                sidKey = sid
+                sidKey = str(sid)
                 self.sids[sidKey] = self.sids.get(sidKey, 0) + 1
                 if deviceId == "{PSID}":
                     self.psidSids[sidKey] = self.psidSids.get(sidKey, 0) + 1
