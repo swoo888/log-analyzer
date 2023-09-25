@@ -1,14 +1,16 @@
 import asyncio
+import logging
 import os
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from fetcher.logly import LoglyFetcher
+from fetcher.loggly import LogglyFetcher
 
 
 class TestLoglyFetcher(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         super().setUp()
+        self.logger = logging.getLogger(__name__)
         self.baseUri = os.getenv("fetcherBaseUri")
         self.queryParam = os.getenv("fetcherQueryParam")
         self.endTime = datetime.now(timezone.utc)
@@ -17,12 +19,13 @@ class TestLoglyFetcher(unittest.IsolatedAsyncioTestCase):
         self.sourceGroup = os.getenv("fetcherSourceGroup")
         self.resultQueue = asyncio.Queue()
 
-        self.fetcher = LoglyFetcher(
+        self.fetcher = LogglyFetcher(
+            self.logger,
+            self.resultQueue,
             self.baseUri,
             self.queryParam,
             self.authToken,
             self.sourceGroup,
-            self.resultQueue,
         )
 
     async def test_fetch(self):

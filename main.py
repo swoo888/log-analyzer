@@ -7,7 +7,7 @@ import pytz
 
 from analyzer.session import SessionAnalyzer
 from controller.controller import Controller
-from fetcher.logly import LoglyFetcher
+from fetcher.loggly import LogglyFetcher
 from utils.loggingConfig import LoggerConfig
 
 
@@ -28,7 +28,7 @@ async def analyze_session():
     durationDays = 30
     startTime = endTime - timedelta(days=durationDays)
 
-    fetcher = LoglyFetcher(resultQueue, baseUri, queryParam, authToken, sourceGroup)
+    fetcher = LogglyFetcher(resultQueue, baseUri, queryParam, authToken, sourceGroup)
     analyzer = SessionAnalyzer(logger)
     controller = Controller(logger, fetcher, analyzer, startTime, endTime)
     result = await controller.run()

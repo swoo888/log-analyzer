@@ -7,7 +7,7 @@ from aiohttp import ClientSession, TCPConnector
 from fetcher.fetcher import Fetcher
 
 
-class LoglyFetcher(Fetcher):
+class LogglyFetcher(Fetcher):
     MAX_RECORD_SIZE = 1000  # loggly's max fetch size limit
     FETCH_INTERVAL_SECS = 5 * 60  # loggly data fetch interval
 
@@ -59,7 +59,7 @@ class LoglyFetcher(Fetcher):
     ) -> None:
         params = {
             "q": self.queryParam,
-            "size": LoglyFetcher.MAX_RECORD_SIZE,
+            "size": self.MAX_RECORD_SIZE,
             "from": self.getUtcStr(timeFrom),
             "until": self.getUtcStr(timeTo),
         }
