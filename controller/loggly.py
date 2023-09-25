@@ -6,15 +6,9 @@ from datetime import datetime, timedelta
 import pytz
 
 from analyzer.session import SessionAnalyzer
-from controller.controller import Controller
-from fetcher.logly import LoglyFetcher
-from utils.loggingConfig import LoggerConfig
 
 
-async def analyze_session():
-    logger = logging.getLogger(__name__)
-    resultQueue = asyncio.Queue()
-
+async def main():
     baseUri = os.getenv("fetcherBaseUri")
     queryParam = os.getenv("fetcherQueryParam")
     authToken = os.getenv("fetcherToken")
@@ -28,17 +22,17 @@ async def analyze_session():
     durationDays = 30
     startTime = endTime - timedelta(days=durationDays)
 
-    fetcher = LoglyFetcher(resultQueue, baseUri, queryParam, authToken, sourceGroup)
-    analyzer = SessionAnalyzer(logger)
-    controller = Controller(logger, fetcher, analyzer, startTime, endTime)
-    result = await controller.run()
-    logger.info(result)
+    analalyzer = SessionAnalyzer(baseUri, queryParam, authToken, sourceGroup)
+    await analalyzer.analyze(startTime, endTime)
 
 
+# logging.basicConfig(filename='example.log', encoding='utf-8', level=logging.DEBUG)
 timeStart = datetime.now()
-LoggerConfig.setUpBasicLogging()
-
-asyncio.run(analyze_session())
-
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+asyncio.run(main())
 timeSpent = datetime.now() - timeStart
 print(f"total time spent: {timeSpent}")

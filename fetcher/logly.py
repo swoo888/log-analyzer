@@ -4,42 +4,35 @@ from datetime import datetime, timedelta
 
 from aiohttp import ClientSession, TCPConnector
 
+from fetcher.fetcher import Fetcher
 
-class LoglyFetcher:
+
+class LoglyFetcher(Fetcher):
     MAX_RECORD_SIZE = 1000  # loggly's max fetch size limit
     FETCH_INTERVAL_SECS = 5 * 60  # loggly data fetch interval
 
     def __init__(
         self,
+        logger: logging.Logger,
+        resultQueue: asyncio.Queue,
         baseUri: str,
         queryParam: str,
         authToken: str,
         sourceGroup: str,
-        resultQueue: asyncio.Queue,
-        maxConcurrency: int = 20,
-        maxRetries: int = 100,
     ) -> None:
+        super.__init__(logger, resultQueue)
+        self.logger = logger
         self.baseUri = baseUri  # "http://companyName.loggly.com/apiv2"
         self.queryParam = queryParam
         self.authToken = authToken
         self.sourceGroup = sourceGroup
-        self.resultQueue = resultQueue
-        self.logger = logging.getLogger(LoglyFetcher.__name__)
         self.headers = {
             "Authorization": "bearer " + authToken,
             "Content-Type": "application/json",
         }
-        self.finished = False
-        self.maxConcurrency = maxConcurrency
-        self.maxRetries = maxRetries
+        self.intervalSecs = self.FETCH_INTERVAL_SECS,
 
-    def getUtcStr(self, utcTime: datetime) -> str:
-        return utcTime.isoformat(timespec="milliseconds").replace("+00:00", "Z")
-
-    def isFinished(self) -> bool:
-        return self.finished
-
-    async def fetchJson(
+    async def _fetchJson(
         self,
         session: ClientSession,
         url: str,
@@ -58,7 +51,7 @@ class LoglyFetcher:
                 await asyncio.sleep(1)
         return None
 
-    async def fetchTimeRange(
+    async def _fetchTimeRange(
         self,
         session: ClientSession,
         timeFrom: datetime,
@@ -72,36 +65,38 @@ class LoglyFetcher:
         }
         url = self.baseUri + "events/iterate"
         while url:
-            jsonData = await self.fetchJson(session, url, params)
+            jsonData = await self._fetchJson(session, url, params)
             if jsonData is None:
                 raise Exception("fetching data failed with max tries")
-            await self.putData(jsonData)
+            await self._putData(jsonData)
             url = jsonData.get("next", "")
 
-    async def putData(self, jsonData: dict) -> None:
+    async def _putData(self, jsonData: dict) -> None:
         events = jsonData["events"]
         self.logger.info(f"Search data received {len(events)}")
         await self.resultQueue.put(events)
 
     async def fetch(
-        self, startTime: datetime, endTime: datetime, intervalSecs: int = FETCH_INTERVAL_SECS
+        self,
+        startTime: datetime,
+        endTime: datetime,
     ) -> None:
         start = startTime
-        deltaSecs = timedelta(seconds=intervalSecs)
+        deltaSecs = timedelta(seconds=self.intervalSecs)
         tasks = []
         tcpConn = TCPConnector(limit=self.maxConcurrency)
         async with ClientSession(headers=self.headers, connector=tcpConn) as session:
             while start < endTime:
                 end = min(start + deltaSecs, endTime)
                 self.logger.info(f"fetching {start}, {end}")
-                tasks.append(self.fetchTimeRange(session, start, end))
+                tasks.append(self._fetchTimeRange(session, start, end))
                 start = start + deltaSecs
                 if len(tasks) >= self.maxConcurrency:
                     await asyncio.gather(*tasks)
-                    self.logger.info(f"finished batch of {self.maxConcurrency} at {endTime}")
+                    self.logger.info(
+                        f"finished batch of {self.maxConcurrency} at {endTime}"
+                    )
                     tasks = []
             if len(tasks) > 0:
                 await asyncio.gather(*tasks)
-        await self.resultQueue.put(None)  # Allow analyzer await function to exist
-        self.finished = True
-        self.logger.info("=== Finished data Fetch ===")
+        await self.done()
