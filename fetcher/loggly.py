@@ -20,7 +20,7 @@ class LogglyFetcher(Fetcher):
         authToken: str,
         sourceGroup: str,
     ) -> None:
-        super.__init__(logger, resultQueue)
+        super().__init__(logger, resultQueue)
         self.logger = logger
         self.baseUri = baseUri  # "http://companyName.loggly.com/apiv2"
         self.queryParam = queryParam

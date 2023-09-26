@@ -21,7 +21,7 @@ class Fetcher:
             maxRetries (int, optional): Max retries. Defaults to 3.
         """
         self.logger = logger
-        self.resulQueue = resultQueue
+        self.resultQueue = resultQueue
         self.maxConcurrency = maxConcurrency
         self.maxRetries = maxRetries
         self.finished = False
@@ -51,7 +51,7 @@ class Fetcher:
         Returns:
             Any: Data from async queue.
         """
-        return self.resultQueue.get()
+        return await self.resultQueue.get()
 
     @abc.abstractclassmethod
     async def fetch(self, startTime: datetime, endTime: datetime) -> None:

@@ -1,17 +1,21 @@
 import asyncio
+import csv
+import json
 import logging
 import os
 from datetime import datetime, timedelta
 
 import pytz
 
+from analyzer.body_error import BodyErrorAnalyzer
 from analyzer.session import SessionAnalyzer
 from controller.controller import Controller
+from fetcher.body_error import BodyErrorFetcher
 from fetcher.loggly import LogglyFetcher
-from utils.loggingConfig import LoggerConfig
+from utils.logging_config import LoggerConfig
 
 
-async def analyze_session():
+async def analyzeSession():
     logger = logging.getLogger(__name__)
     resultQueue = asyncio.Queue()
 
@@ -35,10 +39,21 @@ async def analyze_session():
     logger.info(result)
 
 
+async def analyzeBodyError():
+    logger = logging.getLogger(__name__)
+    resultQueue = asyncio.Queue()
+    csvFile = os.getenv("bodyErrorCsv")
+    fetcher = BodyErrorFetcher(logger, resultQueue, csvFile)
+    analyzer = BodyErrorAnalyzer(logger)
+    controller = Controller(logger, fetcher, analyzer, datetime.min, datetime.max)
+    await controller.run()
+
+
 timeStart = datetime.now()
 LoggerConfig.setUpBasicLogging()
 
-asyncio.run(analyze_session())
+# asyncio.run(analyzeSession())
+asyncio.run(analyzeBodyError())
 
 timeSpent = datetime.now() - timeStart
 print(f"total time spent: {timeSpent}")

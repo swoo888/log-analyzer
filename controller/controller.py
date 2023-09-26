@@ -1,6 +1,6 @@
 import asyncio
-from datetime import datetime
 import logging
+from datetime import datetime
 
 from analyzer.analyzer import Analyzer
 from fetcher.fetcher import Fetcher
@@ -22,17 +22,24 @@ class Controller:
         self.endTime = endTime
 
     async def run(self):
-        self.logger.info(f"=== Run analysis from {self.startTime} to {self.endTime} ===")
+        self.logger.info(
+            f"=== Run analysis from {self.startTime} to {self.endTime} ==="
+        )
         await asyncio.gather(
             self.fetcher.fetch(self.startTime, self.endTime), self._analyze()
         )
 
-    async def _analyze(self):
-        while not self.fetcher.isFinished():
-            data = await self.getData()
+    async def _analyze(self) -> None:
+        self.logger.info(f"_analyze: {self.fetcher.isFinished()}")
+        while True:
+            data = await self.fetcher.getData()
             if data is None:
-                continue
-            self.analyzer.analyze(data)
+                self.logger.info("data is None")
+                break
+            else:
+                self.logger.info(f"analyzing data ${data}")
+                await self.analyzer.analyze(data)
+
         self.logger.info("analyzData completed")
         result = self.analyzer.getResult()
         self.logger.info(result)
