@@ -13,10 +13,7 @@ class Analyzer:
         pass
 
     @abc.abstractclassmethod
-    def getResult(self) -> str:
-        """Get the full analysis result after all data are completely analyzed.
-
-        Returns:
-            str: Analysis result after all data are fetched and analyzed.
+    def dumpResult(self) -> None:
+        """Dump the full analysis result after all data are completely analyzed.
         """
         pass

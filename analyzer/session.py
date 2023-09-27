@@ -36,7 +36,7 @@ class SessionAnalyzer(Analyzer):
             elif deviceId == "channel":
                 self.channelSids[sidKey] = self.channelSids.get(sidKey, 0) + 1
 
-    def getResult(self):
+    def dumpResult(self) -> None:
         labels = ["All sid", "deviceId=PSID", "deviceId=channel"]
         data = [self.sids, self.psidSids, self.channelSids]
         result = {}
@@ -48,4 +48,4 @@ class SessionAnalyzer(Analyzer):
             count = len(descData)
             countIncludingEmpty = count + dataDict.get("", 0)
             result[label] = {count, countIncludingEmpty}
-        return json.dumps(result)
+        self.logger.info(json.dumps(result))

@@ -1,6 +1,4 @@
 import asyncio
-import csv
-import json
 import logging
 import os
 from datetime import datetime, timedelta
@@ -11,6 +9,7 @@ from analyzer.body_error import BodyErrorAnalyzer
 from analyzer.session import SessionAnalyzer
 from controller.controller import Controller
 from fetcher.body_error import BodyErrorFetcher
+from fetcher.daily_totals import DailyTotalFetcher
 from fetcher.loggly import LogglyFetcher
 from utils.logging_config import LoggerConfig
 
@@ -43,9 +42,18 @@ async def analyzeBodyError():
     logger = logging.getLogger(__name__)
     resultQueue = asyncio.Queue()
     csvFile = os.getenv("bodyErrorCsv")
-    fetcher = BodyErrorFetcher(logger, resultQueue, csvFile)
-    analyzer = BodyErrorAnalyzer(logger)
-    controller = Controller(logger, fetcher, analyzer, datetime.min, datetime.max)
+    csvDailySubmitFile = os.getenv("dailySubmitCsv")
+    csvOutputFile = os.getenv("bodyErrorCsvOut")
+    csvDailyOutputFile = os.getenv("bodyErrorDailyCsvOut")
+    csvDailyPercentOutputFile = os.getenv("bodyErrorDailyPercentCsvOut")
+    dailySubmitFetcher = DailyTotalFetcher(logger, resultQueue, csvDailySubmitFile)
+    bodyErrorFetcher = BodyErrorFetcher(logger, resultQueue, csvFile)
+    analyzer = BodyErrorAnalyzer(logger, csvOutputFile, csvDailyOutputFile, csvDailyPercentOutputFile)
+    # first analyze daily submit totals
+    controller = Controller(logger, dailySubmitFetcher, analyzer, datetime.min, datetime.max)
+    await controller.run()
+    # analyze errors
+    controller = Controller(logger, bodyErrorFetcher, analyzer, datetime.min, datetime.max)
     await controller.run()
 
 

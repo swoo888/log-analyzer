@@ -41,5 +41,4 @@ class Controller:
                 await self.analyzer.analyze(data)
 
         self.logger.info("analyzData completed")
-        result = self.analyzer.getResult()
-        self.logger.info(result)
+        self.analyzer.dumpResult()
